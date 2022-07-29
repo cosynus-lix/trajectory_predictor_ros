@@ -7,11 +7,12 @@ from geometry_msgs.msg import Point
 import numpy as np
 
 from trajectory_predictor.utils.SplineOptimizer import SplineOptimizer
-from trajectory_predictor.model.MeanPredictor.MeanPredictor import MeanPredictor
+from trajectory_predictor.model.Improved_baseline.Improved_baseline_model import Improved_BaselineModel
 from trajectory_predictor.dataset.Dataset import Dataset
 
 class Agent(object):
-    def __init__(self, spline, predictor_model, max_queue_length=10):
+    def __init__(self, spline, predictor_model, max_queue_length=100):
+        # TODO: lenght is stopping at max-1
         self.max_queue_length = max_queue_length
         self.spline = spline
         self.predictor_model = predictor_model
@@ -82,9 +83,11 @@ class Agent(object):
     def predict(self):
         history = np.vstack(self.trajectory_history)
         series = self.dataset.history_to_series(history)
-        series = series[:, :-1] # removing curvatures which aren't used
-        prediction = self.predictor_model.predict(series, 300)
-    
+        self.dataset.data_np = series
+        # series = series[:, :-1] # removing curvatures which aren't used
+        # prediction = self.predictor_model.predict(series, 300)
+        prediction = self.predictor_model.predict(self.dataset, len(series)-1, 300, self.spline)
+
         # Converting delta progress to progress in predicion
         # TODO this can be danggerous if not done correctly
         prediction[:, 0] = np.cumsum(prediction[:, 0]) + history[-1, 0]
@@ -104,6 +107,7 @@ class Agent(object):
 
 if __name__ == '__main__':
     track = np.loadtxt(f'../../gmapping/new_map.csv', delimiter=',')
+    track = np.flip(track, axis=0)
     rospy.init_node('progress_printer')
 
     # Initializing track centerline
@@ -111,7 +115,7 @@ if __name__ == '__main__':
     optim.sample_spline_by_tolerance(0.1, optimize=False, verbose=False)
 
     # Initializing predictor
-    model = MeanPredictor()
-    
+    model = Improved_BaselineModel(30, 64)
+    model.load('/home/lix/aloysiogl/models/Improved_Baseline_model_scenario2.pt')
     progress_printer = Agent(optim, model)
     rospy.spin()
